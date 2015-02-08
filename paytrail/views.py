@@ -1,4 +1,4 @@
-# Copyright (c) 2014 Data King Ltd
+# Copyright (c) 2014-2015 Data King Ltd
 # See LICENSE file for license details
 
 from django.conf import settings
@@ -86,7 +86,10 @@ class PaymentDetailsView(CorePaymentDetailsView):
 
 class ReturnView(CorePaymentDetailsView):
 
-    def check_preconditions(self, request):
+    def check_pre_conditions(self, request):
+        pass
+
+    def check_skip_conditions(self, request):
         pass
 
     def get(self, request, *args, **kwargs):
