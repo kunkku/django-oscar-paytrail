@@ -1,12 +1,13 @@
-# Copyright (c) 2014 Data King Ltd
+# Copyright (c) 2014-2020 Data King Ltd
 # See LICENSE file for license details
 
-from django.conf.urls import *
+from django.urls import path
 from paytrail.views import *
 
-urlpatterns = patterns(
-    '',
-    url(r'^success/$', SuccessView.as_view(), name='paytrail-success'),
-    url(r'^failure/$', FailureView.as_view(), name='paytrail-failure'),
-    url(r'^notify/(.+)/$', notification, name='paytrail-notification')
+app_name = 'paytrail'
+
+urlpatterns = (
+    path('success/', SuccessView.as_view(), name='success'),
+    path('failure/', FailureView.as_view(), name='failure'),
+    path('notify/<token>/', notification, name='notification')
 )
