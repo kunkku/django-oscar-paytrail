@@ -14,7 +14,6 @@ import json
 import urllib.request
 
 
-source_type = SourceType.objects.get_or_create(name='Paytrail')[0]
 signer = Signer()
 
 
@@ -39,6 +38,9 @@ class ErrorProcessor(urllib.request.HTTPErrorProcessor):
 url_opener = urllib.request.build_opener(
     urllib.request.HTTPBasicAuthHandler(pw_manager), ErrorProcessor()
 )
+
+def get_source_type():
+    return SourceType.objects.get_or_create(name='Paytrail')[0]
 
 
 class PaymentDetailsView(CorePaymentDetailsView):
@@ -102,7 +104,7 @@ class SuccessView(ReturnView):
 
     def handle_payment(self, order_number, total, **kwargs):
         self.add_payment_source(
-            Source(amount_allocated=total.incl_tax, source_type=source_type)
+            Source(amount_allocated=total.incl_tax, source_type=get_source_type())
         )
 
 
@@ -118,5 +120,5 @@ class FailureView(ReturnView):
 def notification(request, token):
     get_model('order', 'Order').objects.get(
         number=signer.unsign(token)
-    ).sources.get(source_type=source_type).debit()
+    ).sources.get(source_type=get_source_type()).debit()
     return HttpResponse()
