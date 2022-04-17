@@ -316,7 +316,7 @@ def notification(request, token):
         # Payment source is created in SuccessView.
         # It is possible that this callback view is called before SuccessView
         # so source might not be available yet.
-        source = get_object_or_404(order.sources.all(), source_type=get_source_type())
+        source = get_object_or_404(order.sources, source_type=get_source_type())
 
         # check if transaction is already created
         try:
