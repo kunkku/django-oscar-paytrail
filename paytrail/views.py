@@ -329,9 +329,6 @@ def notification(request, token):
         except Transaction.DoesNotExist:
             # create new transaction by debit method
             source.debit(reference=transaction_id, status=status)
-
-        if not source.transactions.filter(reference=transaction_id).exists():
-            source.debit(reference=transaction_id)
     else:
         logger.error(
             'checkout-status was not ok: %s (transaction id: %s, order: %s)',
@@ -340,4 +337,4 @@ def notification(request, token):
             order,
         )
 
-    return HttpResponse('ok')
+    return HttpResponse()
