@@ -12,16 +12,18 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.signing import Signer
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from oscar.apps.checkout.views import PaymentDetailsView as CorePaymentDetailsView
 from oscar.apps.payment import exceptions
-from oscar.apps.payment.models import Source, SourceType
+from oscar.apps.payment.models import Source, SourceType, Transaction
 from oscar.core.loading import get_model
 
 TEST_MERCHANT_ID = '375917'
 TEST_MERCHANT_SECRET = 'SAIPPUAKAUPPIAS'
 URL = 'https://services.paytrail.com/payments'
 
+Order = get_model('order', 'Order')
 logger = logging.getLogger(__name__)
 signer = Signer()
 
@@ -292,9 +294,50 @@ class FailureView(ReturnView):
 
 
 def notification(request, token):
-    """Paytrail server calls this when payment was successful."""
+    """
+    Paytrail server calls this when payment was successful.
+    This can be called multiple times per one payment.
+    Creates a transaction object if not already created.
+    """
     validate_signature(request.GET)
-    get_model('order', 'Order').objects.get(
-        number=signer.unsign(token)
-    ).sources.get(source_type=get_source_type()).debit()
-    return HttpResponse()
+    order = get_object_or_404(Order, number=signer.unsign(token))
+
+    transaction_id = request.GET.get('checkout-transaction-id', None)
+    if not transaction_id:
+        logger.error('checkout-transaction-id missing', code=400)
+        raise ValidationError
+
+    status = request.GET.get('checkout-status', None)
+    if not status:
+        logger.error('checkout-status query parameter missing')
+        raise ValidationError('checkout-status missing', code=400)
+
+    if status in ['ok', 'pending', 'delayed']:
+        # Payment source is created in SuccessView.
+        # It is possible that this callback view is called before SuccessView
+        # so source might not be available yet.
+        source = get_object_or_404(order.sources.all(), source_type=get_source_type())
+
+        # check if transaction is already created
+        try:
+            transaction = source.transactions.get(reference=transaction_id)
+            if status != transaction.status:
+                # transaction status has changed
+                transaction.status = status
+                transaction.save()
+                logger.info('Transaction %d status changed to %s', transaction.id, status)
+        except Transaction.DoesNotExist:
+            # create new transaction by debit method
+            source.debit(reference=transaction_id, status=status)
+
+        if not source.transactions.filter(reference=transaction_id).exists():
+            source.debit(reference=transaction_id)
+    else:
+        logger.error(
+            'checkout-status was not ok: %s (transaction id: %s, order: %s)',
+            status,
+            transaction_id,
+            order,
+        )
+
+    return HttpResponse('ok')
