@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.signing import Signer
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from oscar.apps.checkout.views import PaymentDetailsView as CorePaymentDetailsView
 from oscar.apps.payment import exceptions
@@ -23,6 +23,7 @@ TEST_MERCHANT_ID = '375917'
 TEST_MERCHANT_SECRET = 'SAIPPUAKAUPPIAS'
 URL = 'https://services.paytrail.com/payments'
 
+Basket = get_model('basket', 'Basket')
 Order = get_model('order', 'Order')
 logger = logging.getLogger(__name__)
 signer = Signer()
@@ -270,7 +271,11 @@ class ReturnView(CorePaymentDetailsView):
 
     def get(self, request, *args, **kwargs):
         validate_signature(request.GET)
-        self.get_submitted_basket().thaw()
+        try:
+            self.get_submitted_basket().thaw()
+        except Basket.DoesNotExist:
+            # basket does not exist - who are you?
+            return redirect('/')
         return self.handle_place_order_submission(request)
 
 
