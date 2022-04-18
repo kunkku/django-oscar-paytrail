@@ -304,8 +304,8 @@ def notification(request, token):
 
     transaction_id = request.GET.get('checkout-transaction-id', None)
     if not transaction_id:
-        logger.error('checkout-transaction-id missing', code=400)
-        raise ValidationError
+        logger.error('checkout-transaction-id query parameter missing')
+        raise ValidationError('checkout-transaction-id missing', code=400)
 
     status = request.GET.get('checkout-status', None)
     if not status:
