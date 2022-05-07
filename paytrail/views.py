@@ -10,7 +10,6 @@ import uuid
 from datetime import datetime
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.signing import Signer
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -25,8 +24,8 @@ URL = 'https://services.paytrail.com/payments'
 
 Basket = get_model('basket', 'Basket')
 Order = get_model('order', 'Order')
+Transaction = get_model('payment', 'Transaction')
 logger = logging.getLogger(__name__)
-signer = Signer()
 
 def calculate_hmac(headers, body):
     """
@@ -199,11 +198,6 @@ class PaymentDetailsView(CorePaymentDetailsView):
             },
         }
 
-        callback_url = uri('notification', signer.sign(order_number))
-        # callback url must start with https
-        if callback_url.startswith('https'):
-            body['callbackUrls'] = { 'success': callback_url }
-
         shipping_address = self.get_address_dict(ctx['shipping_address'])
         if shipping_address is not None:
             body['deliveryAddress'] = shipping_address
@@ -269,14 +263,37 @@ class ReturnView(CorePaymentDetailsView):
     def check_skip_conditions(self, request):
         pass
 
-    def get(self, request, *args, **kwargs):
+    def validate_request(self, request):
         validate_signature(request.GET)
+        if 'checkout-transaction-id' not in request.GET:
+            logger.error('checkout-transaction-id query parameter missing')
+            raise ValidationError('checkout-transaction-id missing', code=400)
+
+        if 'checkout-status' not in request.GET:
+            logger.error('checkout-status query parameter missing')
+            raise ValidationError('checkout-status missing', code=400)
+
+    def get(self, request, *args, **kwargs):
+        self.validate_request(request)
+
         try:
             self.get_submitted_basket().thaw()
         except Basket.DoesNotExist:
-            # basket does not exist - who are you?
-            return redirect('/')
+            # no basket found from session, this might
+            # be a request to update transaction status
+            self.update_transaction_status()
+            return HttpResponse()
+
         return self.handle_place_order_submission(request)
+
+    def update_transaction_status(self):
+        transaction_id = self.request.GET.get('checkout-transaction-id')
+        transaction = get_object_or_404(Transaction, reference=transaction_id)
+        new_status = self.request.GET.get('checkout-status')
+        if new_status != transaction.status:
+            transaction.status = new_status
+            transaction.save()
+            logger.info('Transaction %d status changed to %s', transaction.id, new_status)
 
 
 class SuccessView(ReturnView):
@@ -287,6 +304,16 @@ class SuccessView(ReturnView):
             Source(amount_allocated=total.incl_tax, source_type=get_source_type())
         )
 
+    def place_order(self, *args, **kwargs):
+        order = super().place_order(*args, **kwargs)
+        source = order.sources.get(source_type=get_source_type())
+        # create new transaction by debit method
+        source.debit(
+            reference=self.request.GET.get('checkout-transaction-id'),
+            status=self.request.GET.get('checkout-status'),
+        )
+        return order
+
 
 class FailureView(ReturnView):
     """Payment failed or it was cancelled by user."""
@@ -296,50 +323,3 @@ class FailureView(ReturnView):
 
     def render_payment_details(self, request, **kwargs):
         return self.render_preview(request, **kwargs)
-
-
-def notification(request, token):
-    """
-    Paytrail server calls this when payment was successful.
-    This can be called multiple times per one payment.
-    Creates a transaction object if not already created.
-    """
-    validate_signature(request.GET)
-    order = get_object_or_404(Order, number=signer.unsign(token))
-
-    transaction_id = request.GET.get('checkout-transaction-id', None)
-    if not transaction_id:
-        logger.error('checkout-transaction-id query parameter missing')
-        raise ValidationError('checkout-transaction-id missing', code=400)
-
-    status = request.GET.get('checkout-status', None)
-    if not status:
-        logger.error('checkout-status query parameter missing')
-        raise ValidationError('checkout-status missing', code=400)
-
-    if status in ['ok', 'pending', 'delayed']:
-        # Payment source is created in SuccessView.
-        # It is possible that this callback view is called before SuccessView
-        # so source might not be available yet.
-        source = get_object_or_404(order.sources, source_type=get_source_type())
-
-        # check if transaction is already created
-        try:
-            transaction = source.transactions.get(reference=transaction_id)
-            if status != transaction.status:
-                # transaction status has changed
-                transaction.status = status
-                transaction.save()
-                logger.info('Transaction %d status changed to %s', transaction.id, status)
-        except Transaction.DoesNotExist:
-            # create new transaction by debit method
-            source.debit(reference=transaction_id, status=status)
-    else:
-        logger.error(
-            'checkout-status was not ok: %s (transaction id: %s, order: %s)',
-            status,
-            transaction_id,
-            order,
-        )
-
-    return HttpResponse()
