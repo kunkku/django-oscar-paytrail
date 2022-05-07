@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from oscar.apps.checkout.views import PaymentDetailsView as CorePaymentDetailsView
 from oscar.apps.payment import exceptions
-from oscar.apps.payment.models import Source, SourceType, Transaction
+from oscar.apps.payment.models import Source, SourceType
 from oscar.core.loading import get_model
 
 TEST_MERCHANT_ID = '375917'
