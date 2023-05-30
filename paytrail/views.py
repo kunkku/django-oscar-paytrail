@@ -9,7 +9,7 @@ import urllib.request
 import uuid
 from datetime import datetime
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import BadRequest
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -242,7 +242,7 @@ def validate_signature(query_dict):
     )
     if received_hmac != calculated_hmac:
         logger.error('Invalid signature in query params: %s - should be %s', received_hmac, calculated_hmac)
-        raise ValidationError('Invalid signature', code=400)
+        raise BadRequest('Invalid signature')
 
 
 class ReturnView(CorePaymentDetailsView):
@@ -257,11 +257,11 @@ class ReturnView(CorePaymentDetailsView):
         validate_signature(request.GET)
         if 'checkout-transaction-id' not in request.GET:
             logger.error('checkout-transaction-id query parameter missing')
-            raise ValidationError('checkout-transaction-id missing', code=400)
+            raise BadRequest('checkout-transaction-id missing')
 
         if 'checkout-status' not in request.GET:
             logger.error('checkout-status query parameter missing')
-            raise ValidationError('checkout-status missing', code=400)
+            raise BadRequest('checkout-status missing')
 
     def get(self, request, *args, **kwargs):
         self.validate_request(request)
