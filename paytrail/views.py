@@ -133,22 +133,33 @@ class PaymentDetailsView(CorePaymentDetailsView):
         vat_percentage = hundred(basket.strategy.rate)
 
         class PaytrailItem:
-            def __init__(self, basket_line=None, unit_price=None, product_code=None):
+            def __init__(
+                self,
+                basket_line=None,
+                unit_price=None,
+                product_code=None,
+                description=None
+            ):
                 self.unit_price = unit_price
                 self.units = 1
                 self.product_code = product_code
+                self.description = description
                 if basket_line is not None:
                     self.unit_price = basket_line.purchase_info.price.incl_tax
                     self.units = basket_line.quantity
                     self.product_code = basket_line.product.upc
+                    self.description = basket_line.product.title
 
             def to_json(self):
-                return {
+                res = {
                     'unitPrice': hundred(self.unit_price),
                     'units': self.units,
                     'vatPercentage': vat_percentage,
                     'productCode': str(self.product_code),
                 }
+                if self.description is not None:
+                    res['description'] = str(self.description)
+                return res
 
         # Paytrail requires at least one item and total payment amount
         # must match the total sum of items.
@@ -162,6 +173,7 @@ class PaymentDetailsView(CorePaymentDetailsView):
                 PaytrailItem(
                     unit_price=ctx['shipping_charge'].incl_tax,
                     product_code='shipping',
+                    description=ctx['shipping_method'].name
                 ),
             )
 
