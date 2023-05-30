@@ -267,14 +267,16 @@ class ReturnView(CorePaymentDetailsView):
         self.validate_request(request)
 
         try:
-            self.get_submitted_basket().thaw()
+            basket = self.get_submitted_basket()
         except Basket.DoesNotExist:
             # no basket found from session, this might
             # be a request to update transaction status
             self.update_transaction_status()
             return HttpResponse()
 
-        return self.handle_place_order_submission(request)
+        basket.thaw()
+        basket.strategy = request.strategy
+        return self.submit(**self.build_submission(basket=basket))
 
     def update_transaction_status(self):
         transaction_id = self.request.GET.get('checkout-transaction-id')
