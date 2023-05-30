@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2022 Data King Ltd
+# Copyright (c) 2014-2023 Data King Ltd
 # See LICENSE file for license details
 
 import hashlib
@@ -76,11 +76,6 @@ url_opener = urllib.request.build_opener(
 class PaymentDetailsView(CorePaymentDetailsView):
     preview = True
 
-    def handle_place_order_submission(self, request):
-        return self.submit(
-            **self.build_submission(payment_kwargs={'req': request})
-        )
-
     def gen_headers(self, body):
         """Returns headers for payment request as list of (header, value) tuples."""
         headers = [
@@ -129,7 +124,7 @@ class PaymentDetailsView(CorePaymentDetailsView):
             return addr
         return None
 
-    def create_payment_request(self, request, order_number, order_total, lang):
+    def create_payment_request(self, order_number, order_total, lang):
         """Returns payment request."""
         ctx = self.get_context_data()
         basket = ctx['basket']
@@ -180,7 +175,7 @@ class PaymentDetailsView(CorePaymentDetailsView):
             )
 
         def uri(name, arg=None):
-            return request.build_absolute_uri(
+            return self.request.build_absolute_uri(
                 reverse('paytrail:' + name, args=(arg,) if arg else None)
             )
 
@@ -217,12 +212,7 @@ class PaymentDetailsView(CorePaymentDetailsView):
         lang = kwargs['lang'] if 'lang' in kwargs else 'FI'
 
         response = url_opener.open(
-            self.create_payment_request(
-                kwargs['req'],
-                order_number,
-                total,
-                lang,
-            ),
+            self.create_payment_request(order_number, total, lang)
         )
 
         # logging the value of request-id header is recommended
