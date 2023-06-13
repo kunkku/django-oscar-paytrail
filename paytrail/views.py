@@ -246,6 +246,9 @@ class PaymentDetailsView(CorePaymentDetailsView):
 
 def validate_signature(query_dict):
     """Validates signature in request query parameters."""
+    if 'signature' not in query_dict:
+        logger.error('No signature provided in query params')
+        raise BadRequest('Missing signature')
     received_hmac = query_dict['signature']
     calculated_hmac = calculate_hmac(
         # convert query params to list of tuples
