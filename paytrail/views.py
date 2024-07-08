@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2023 Data King Ltd
+# Copyright (c) 2014-2024 Data King Ltd
 # See LICENSE file for license details
 
 import hashlib
@@ -130,7 +130,7 @@ class PaymentDetailsView(CorePaymentDetailsView):
         basket = ctx['basket']
 
         # use basket's strategy to set fixed VAT percentage
-        vat_percentage = hundred(basket.strategy.rate)
+        vat_percentage = float(round(basket.strategy.rate * 100, 1))
 
         class PaytrailItem:
             def __init__(
